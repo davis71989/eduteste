@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+CLI: Temos instalado o cli do supabase vinculado ao projeto na nuvem, sempre que precisar utilize sempre com npx.
+Utilize sempre a api do supabase para realizar alterações no supabase.
+O pai controla o aplicativo.
+O pai precisa ajudar os filhos nas lições de casa.
+O pai pode cadastrar mais de um filho.
+Sempre verificar erros com o mcp do navegador.
+
+- You can @ files here
+- You can use markdown but dont have to

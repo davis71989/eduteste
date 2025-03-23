@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verificador de Produtos do Stripe</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div class="container mx-auto p-6 max-w-4xl">
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+      <h1 class="text-2xl font-bold mb-4">Verificador de Produtos do Stripe</h1>
+      <p class="text-gray-600 mb-6">
+        Esta ferramenta verifica e recria produtos do Stripe para o sistema de pagamentos.
+      </p>
+
+      <!-- Configuração das chaves do Stripe -->
+      <div class="mb-6 border-b pb-6">
+        <h2 class="text-lg font-semibold mb-4">Configuração do Stripe</h2>
+        
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Chave Secreta do Stripe</label>
+          <input type="password" id="stripeSecretKey" class="w-full p-2 border rounded" 
+                 placeholder="sk_test_..." value="sk_test_51R5UXrRrfuwybnpzwZdxo87wjmClLUJykcAKMftgtqpx5EeOJqDHsLr4K8AQvbxbuUq4M7rHOM512rQ4AcLufogK00XbhTYgox">
+        </div>
+      </div>
+
+      <!-- Listagem de planos -->
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold mb-4">Planos do Sistema</h2>
+        
+        <div class="overflow-x-auto">
+          <table class="min-w-full border">
+            <thead>
+              <tr class="bg-gray-100">
+                <th class="px-4 py-2 border text-left text-sm font-medium text-gray-700">Nome</th>
+                <th class="px-4 py-2 border text-left text-sm font-medium text-gray-700">Descrição</th>
+                <th class="px-4 py-2 border text-left text-sm font-medium text-gray-700">Preço (R$)</th>
+                <th class="px-4 py-2 border text-left text-sm font-medium text-gray-700">ID</th>
+                <th class="px-4 py-2 border text-left text-sm font-medium text-gray-700">Produto ID</th>
+                <th class="px-4 py-2 border text-left text-sm font-medium text-gray-700">Preço ID</th>
+                <th class="px-4 py-2 border text-left text-sm font-medium text-gray-700">Status</th>
+              </tr>
+            </thead>
+            <tbody id="planosTable">
+              <!-- Preenchido via JavaScript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Ações -->
+      <div class="flex space-x-4">
+        <button id="verificarBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+          Verificar Produtos
+        </button>
+        <button id="recriarBtn" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700" disabled>
+          Recriar Produtos
+        </button>
+        <button id="exportarBtn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" disabled>
+          Exportar SQL
+        </button>
+      </div>
+    </div>
+
+    <!-- Resultados e mensagens -->
+    <div id="mensagens" class="space-y-4">
+      <!-- Preenchido via JavaScript -->
+    </div>
+
+    <!-- SQL gerado -->
+    <div id="sqlContainer" class="bg-white rounded-lg shadow-md p-6 mt-6 hidden">
+      <h2 class="text-lg font-semibold mb-4">SQL para Atualização</h2>
+      <pre id="sqlOutput" class="bg-gray-100 p-4 rounded overflow-x-auto text-sm"></pre>
+      <button id="copiarBtn" class="mt-4 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+        Copiar SQL
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // Lista de planos esperados no sistema
+    const planosEsperados = [
+      {
+        id: '0b8a742e-228f-4c76-92e4-32f6cb737de1',
+        nome: 'Básico',
+        descricao: 'Plano básico com recursos limitados',
+        preco: 100, // R$ 1.00 em centavos
+        stripeProductId: 'prod_RzVUyy88KVqHA3',
+        stripePriceId: 'price_1R5WTjRvXVt1661Q84Z1a8rC',
+      },
+      {
+        id: 'e147dc1f-9a63-46c5-b4cb-3bad639c8162',
+        nome: 'Intermediário',
+        descricao: 'Plano intermediário com mais recursos',
+        preco: 1000, // R$ 10.00 em centavos
+        stripeProductId: 'prod_RzVUceVCXu4FAn',
+        stripePriceId: 'price_1R5WTjRvXVt1661QZo3y15p1',
+      },
+      {
+        id: '8c8d495a-a9b8-40a6-a0da-57b1977ebc45',
+        nome: 'Avançado',
+        descricao: 'Plano avançado com recursos estendidos',
+        preco: 1990, // R$ 19.90 em centavos
+        stripeProductId: 'prod_RzVU0Y8RwIXgZM',
+        stripePriceId: 'price_1R5WTjRvXVt1661QLfaiQjDm',
+      },
+      {
+        id: '85e05cbc-de9f-46e9-b563-678e20b5cc5a',
+        nome: 'Premium',
+        descricao: 'Plano premium com todos os recursos',
+        preco: 3990, // R$ 39.90 em centavos
+        stripeProductId: 'prod_RzVU2Q5J84N5Hs',
+        stripePriceId: 'price_1R5WTjRvXVt1661QujJbJ5zf',
+      }
+    ];
+
+    // Variáveis de estado
+    let stripe;
+    let produtosVerificados = 0;
+    let produtosTotal = planosEsperados.length;
+    let produtosNovos = [];
+
+    // Elementos DOM
+    const planosTable = document.getElementById('planosTable');
+    const verificarBtn = document.getElementById('verificarBtn');
+    const recriarBtn = document.getElementById('recriarBtn');
+    const exportarBtn = document.getElementById('exportarBtn');
+    const mensagens = document.getElementById('mensagens');
+    const sqlContainer = document.getElementById('sqlContainer');
+    const sqlOutput = document.getElementById('sqlOutput');
+    const copiarBtn = document.getElementById('copiarBtn');
+    const stripeSecretKeyInput = document.getElementById('stripeSecretKey');
+
+    // Inicializar tabela de planos
+    function inicializarTabela() {
+      planosTable.innerHTML = '';
+      
+      planosEsperados.forEach(plano => {
+        const row = document.createElement('tr');
+        row.id = `plano-${plano.id}`;
+        row.innerHTML = `
+          <td class="px-4 py-2 border">${plano.nome}</td>
+          <td class="px-4 py-2 border text-sm">${plano.descricao}</td>
+          <td class="px-4 py-2 border">R$ ${(plano.preco / 100).toFixed(2)}</td>
+          <td class="px-4 py-2 border text-xs">${plano.id}</td>
+          <td class="px-4 py-2 border text-xs">${plano.stripeProductId || '-'}</td>
+          <td class="px-4 py-2 border text-xs">${plano.stripePriceId || '-'}</td>
+          <td class="px-4 py-2 border" id="status-${plano.id}">Não verificado</td>
+        `;
+        planosTable.appendChild(row);
+      });
+    }
+
+    // Adicionar mensagem
+    function adicionarMensagem(tipo, titulo, mensagem) {
+      const alertDiv = document.createElement('div');
+      alertDiv.className = `p-4 rounded ${tipo === 'erro' ? 'bg-red-100 border-red-400 text-red-700' : 
+                                        tipo === 'sucesso' ? 'bg-green-100 border-green-400 text-green-700' : 
+                                        'bg-blue-100 border-blue-400 text-blue-700'}`;
+      alertDiv.innerHTML = `
+        <div class="font-bold">${titulo}</div>
+        <div>${mensagem}</div>
+      `;
+      mensagens.prepend(alertDiv);
+    }
+
+    // Atualizar status na tabela
+    function atualizarStatus(planoId, status, mensagem = '') {
+      const statusCell = document.getElementById(`status-${planoId}`);
+      
+      if (status === 'verificando') {
+        statusCell.innerHTML = '<span class="inline-flex items-center">Verificando...</span>';
+      } 
+      else if (status === 'existe') {
+        statusCell.innerHTML = '<span class="text-green-600 font-medium">Existe</span>';
+      } 
+      else if (status === 'nao-existe') {
+        statusCell.innerHTML = '<span class="text-red-600 font-medium">Não existe</span>';
+      } 
+      else if (status === 'erro') {
+        statusCell.innerHTML = `<span class="text-red-600 font-medium" title="${mensagem}">Erro</span>`;
+      }
+      else if (status === 'criado') {
+        statusCell.innerHTML = '<span class="text-green-600 font-medium">Criado</span>';
+      }
+    }
+
+    // Verificar um produto específico
+    async function verificarProduto(plano) {
+      try {
+        atualizarStatus(plano.id, 'verificando');
+        
+        // Verificar se há IDs do Stripe
+        if (!plano.stripeProductId || !plano.stripePriceId) {
+          atualizarStatus(plano.id, 'nao-existe');
+          return { existe: false, mensagem: 'IDs não configurados' };
+        }
+
+        // Verificar produto
+        let produto;
+        try {
+          produto = await stripe.products.retrieve(plano.stripeProductId);
+        } catch (error) {
+          console.error(`Erro ao verificar produto ${plano.nome}:`, error);
+          atualizarStatus(plano.id, 'nao-existe');
+          return { existe: false, mensagem: 'Produto não encontrado no Stripe' };
+        }
+
+        // Verificar preço
+        let preco;
+        try {
+          preco = await stripe.prices.retrieve(plano.stripePriceId);
+        } catch (error) {
+          console.error(`Erro ao verificar preço ${plano.nome}:`, error);
+          atualizarStatus(plano.id, 'nao-existe');
+          return { existe: false, mensagem: 'Preço não encontrado no Stripe' };
+        }
+
+        // Verificar se o preço pertence ao produto
+        if (preco.product !== plano.stripeProductId) {
+          atualizarStatus(plano.id, 'nao-existe');
+          return { existe: false, mensagem: 'O preço não pertence ao produto' };
+        }
+
+        atualizarStatus(plano.id, 'existe');
+        return { existe: true };
+      } catch (error) {
+        console.error(`Erro ao verificar ${plano.nome}:`, error);
+        atualizarStatus(plano.id, 'erro', error.message);
+        return { existe: false, mensagem: error.message };
+      }
+    }
+
+    // Verificar todos os produtos
+    async function verificarProdutos() {
+      mensagens.innerHTML = '';
+      produtosVerificados = 0;
+      produtosNovos = [];
+      
+      const secretKey = stripeSecretKeyInput.value.trim();
+      
+      if (!secretKey) {
+        adicionarMensagem('erro', 'Erro de Configuração', 'A chave secreta do Stripe é obrigatória.');
+        return;
+      }
+      
+      try {
+        // Inicializar biblioteca do Stripe
+        stripe = Stripe(secretKey);
+        
+        verificarBtn.disabled = true;
+        recriarBtn.disabled = true;
+        exportarBtn.disabled = true;
+        sqlContainer.classList.add('hidden');
+        
+        adicionarMensagem('info', 'Verificação Iniciada', 'Verificando produtos no Stripe...');
+        
+        // Verificar cada produto
+        const resultados = await Promise.all(planosEsperados.map(verificarProduto));
+        
+        // Contar produtos que não existem
+        const produtosInexistentes = resultados.filter(r => !r.existe).length;
+        
+        if (produtosInexistentes === 0) {
+          adicionarMensagem('sucesso', 'Verificação Concluída', 'Todos os produtos estão configurados corretamente no Stripe.');
+        } else {
+          adicionarMensagem('erro', 'Verificação Concluída', `${produtosInexistentes} produto(s) não foram encontrados no Stripe.`);
+          recriarBtn.disabled = false;
+        }
+      } catch (error) {
+        console.error('Erro ao verificar produtos:', error);
+        adicionarMensagem('erro', 'Erro de Verificação', error.message);
+      } finally {
+        verificarBtn.disabled = false;
+      }
+    }
+
+    // Criar um produto no Stripe
+    async function criarProduto(plano) {
+      try {
+        atualizarStatus(plano.id, 'verificando');
+        
+        // Criar o produto
+        const produto = await stripe.products.create({
+          name: plano.nome,
+          description: plano.descricao,
+          metadata: {
+            plano_id: plano.id
+          }
+        });
+        
+        // Criar o preço
+        const preco = await stripe.prices.create({
+          product: produto.id,
+          unit_amount: plano.preco,
+          currency: 'brl',
+          recurring: {
+            interval: 'month'
+          },
+          metadata: {
+            plano_id: plano.id
+          }
+        });
+        
+        // Adicionar à lista de produtos novos
+        produtosNovos.push({
+          planoId: plano.id,
+          nome: plano.nome,
+          produtoId: produto.id,
+          precoId: preco.id
+        });
+        
+        atualizarStatus(plano.id, 'criado');
+        return { sucesso: true, produtoId: produto.id, precoId: preco.id };
+      } catch (error) {
+        console.error(`Erro ao criar produto ${plano.nome}:`, error);
+        atualizarStatus(plano.id, 'erro', error.message);
+        return { sucesso: false, mensagem: error.message };
+      }
+    }
+
+    // Recriar todos os produtos
+    async function recriarProdutos() {
+      mensagens.innerHTML = '';
+      produtosNovos = [];
+      
+      if (!confirm('ATENÇÃO: Esta ação irá criar NOVOS produtos no Stripe com NOVOS IDs. Você precisará atualizar esses IDs no banco de dados depois. Deseja continuar?')) {
+        return;
+      }
+      
+      try {
+        verificarBtn.disabled = true;
+        recriarBtn.disabled = true;
+        exportarBtn.disabled = true;
+        sqlContainer.classList.add('hidden');
+        
+        adicionarMensagem('info', 'Recriação Iniciada', 'Criando produtos no Stripe...');
+        
+        // Criar cada produto
+        const resultados = await Promise.all(planosEsperados.map(criarProduto));
+        
+        // Contar produtos criados
+        const produtosCriados = resultados.filter(r => r.sucesso).length;
+        
+        if (produtosCriados > 0) {
+          adicionarMensagem('sucesso', 'Recriação Concluída', `${produtosCriados} produto(s) foram criados no Stripe.`);
+          exportarBtn.disabled = false;
+          gerarSQL();
+        } else {
+          adicionarMensagem('erro', 'Recriação Concluída', 'Nenhum produto foi criado no Stripe.');
+        }
+      } catch (error) {
+        console.error('Erro ao recriar produtos:', error);
+        adicionarMensagem('erro', 'Erro de Recriação', error.message);
+      } finally {
+        verificarBtn.disabled = false;
+        recriarBtn.disabled = false;
+      }
+    }
+
+    // Gerar SQL para atualização
+    function gerarSQL() {
+      if (produtosNovos.length === 0) return '';
+      
+      const sql = produtosNovos.map(produto => 
+        `UPDATE planos SET stripe_product_id = '${produto.produtoId}', stripe_price_id = '${produto.precoId}' WHERE id = '${produto.planoId}';`
+      ).join('\n');
+      
+      sqlOutput.textContent = sql;
+      sqlContainer.classList.remove('hidden');
+      
+      return sql;
+    }
+
+    // Copiar SQL para a área de transferência
+    function copiarSQL() {
+      const sql = sqlOutput.textContent;
+      
+      if (!sql) return;
+      
+      navigator.clipboard.writeText(sql).then(() => {
+        copiarBtn.textContent = 'Copiado!';
+        setTimeout(() => {
+          copiarBtn.textContent = 'Copiar SQL';
+        }, 2000);
+      }).catch(err => {
+        console.error('Erro ao copiar:', err);
+      });
+    }
+
+    // Event listeners
+    verificarBtn.addEventListener('click', verificarProdutos);
+    recriarBtn.addEventListener('click', recriarProdutos);
+    exportarBtn.addEventListener('click', gerarSQL);
+    copiarBtn.addEventListener('click', copiarSQL);
+
+    // Inicializar
+    inicializarTabela();
+  </script>
+</body>
+</html> 

@@ -1,0 +1,4 @@
+UPDATE planos SET stripe_product_id = 'prod_RzadbDZjP4fWbh', stripe_price_id = 'price_1R5bSQRrfuwybnpzFKmWDejc' WHERE id = '0b8a742e-228f-4c76-92e4-32f6cb737de1';
+UPDATE planos SET stripe_product_id = 'prod_RzadVKYOEVxPRR', stripe_price_id = 'price_1R5bSRRrfuwybnpz39OJF00O' WHERE id = 'e147dc1f-9a63-46c5-b4cb-3bad639c8162';
+UPDATE planos SET stripe_product_id = 'prod_RzadJUZYO1FJk0', stripe_price_id = 'price_1R5bSSRrfuwybnpzsI8S4Al7' WHERE id = '8c8d495a-a9b8-40a6-a0da-57b1977ebc45';
+UPDATE planos SET stripe_product_id = 'prod_RzadDfw8KbRCSD', stripe_price_id = 'price_1R5bSTRrfuwybnpzxZDV6bVi' WHERE id = '85e05cbc-de9f-46e9-b563-678e20b5cc5a';
